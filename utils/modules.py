@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 
 class CBOW(nn.Module):
-    def __init__(self, vocab_size, embeddings, device='cpu', noise_dist=None, negs=15):
+    def __init__(self, vocab_size, embeddings, device='cpu', noise_dist=None, negs=15,batch_size=4096):
         super(CBOW, self).__init__()
 
         self.vocab_size = vocab_size
@@ -20,49 +20,45 @@ class CBOW(nn.Module):
         self.device = device
         self.noise_dist = noise_dist
 
-        self.embeddings_target = nn.Embedding(
-            vocab_size, embeddings, padding_idx=0)
-        self.embeddings_context = nn.Embedding(
-            vocab_size, embeddings, padding_idx=0)
+        self.embeddings_target = nn.Embedding(vocab_size, embeddings)
+        self.embeddings_context = nn.Embedding(vocab_size, embeddings)
 
-        self.embeddings_target.weight.data.uniform_(-1, 1)
-        self.embeddings_context.weight.data.uniform_(-1, 1)
+        self.initialize_embeddings(emb_size=embeddings)
 
-    def forward(self, target, context, debug=False):
-        # TODO: Check if everything is implemented correctly or if we need a softmax here
+    def initialize_embeddings(self, emb_size):
+        custom_range = 0.5 / emb_size
+        self.embeddings_target.weight.data.uniform_(-custom_range, custom_range)
+        self.embeddings_context.weight.data.uniform_(-0, 0)
 
-        # computing out loss
-        emb_input = self.embeddings_target(target)  # bs, emb_dim
-        emb_context = self.embeddings_context(context)  # bs, emb_dim
 
-        emb_product = torch.mul(emb_input, emb_context)  # bs, emb_dim
-        emb_product = torch.sum(emb_product, dim=1)  # bs
+    def forward(self, target, context):
+        # computing embeddings for target and context words
+        emb_input = self.embeddings_target(target)  # bs, emb_dim (4096,100)
+        emb_input = F.dropout(emb_input, 0.1) # mask some terms in the input to prevent overfitting (https://github.com/keras-team/keras/issues/7290)
+        emb_context = self.embeddings_context(context)  # bs, emb_dim (4096,100)
 
-        out_loss = F.logsigmoid(emb_product)  # bs
+        score = torch.mul(emb_input, emb_context)  # bs, emb_dim (4096,100)
+        score = torch.sum(score, dim=1)  # bs
+        loss = F.logsigmoid(-1 * score).squeeze()
 
         if self.negs > 0:
             # computing negative loss
             if self.noise_dist is None:
                 self.noise_dist = torch.ones(self.vocab_size)
 
-            num_neg_samples_for_this_batch = context.shape[0] * self.negs
-            # coz bs*num_neg_samples > vocab_size
-            negative_example = torch.multinomial(
-                self.noise_dist, num_neg_samples_for_this_batch, replacement=True)
+            # Find out how many negative examples we need (here batch size * negs).
+            negs_number = context.shape[0] * self.negs
+            # build negs example
+            negative_example = torch.multinomial(self.noise_dist, negs_number,replacement=True)  # coz bs*num_neg_samples > vocab_size
+            # Move to cuda, without creating another tensor (viewes share the same underlying data with the copied tensors)
+            negative_example = negative_example.view(context.shape[0], self.negs).to(                self.device)  # bs, num_neg_samples
 
-            negative_example = negative_example.view(
-                context.shape[0], self.negs).to(self.device)  # bs, num_neg_samples
-            emb_negative = self.embeddings_context(
-                negative_example)  # bs, neg_samples, emb_dim
-            emb_product_neg_samples = torch.bmm(
-                emb_negative.neg(), emb_input.unsqueeze(2))  # bs, neg_samples, 1
+            # calculate the embds
+            emb_negative = self.embeddings_context(negative_example)  # bs, neg_samples, emb_dim
+            score = torch.bmm(emb_negative.neg(), emb_input.unsqueeze(2))  # bs, neg_samples, 1
+            noise_loss = F.logsigmoid(score).squeeze(2).sum(1)  # bs
+            loss_total = -(loss + noise_loss).mean()
 
-            noise_loss = F.logsigmoid(
-                emb_product_neg_samples).squeeze(2).sum(1)  # bs
-
-            total_loss = -(out_loss + noise_loss).mean()
-
-            return total_loss
-
+            return loss_total
         else:
-            return -(out_loss).mean()
+            raise ValueError('Negatives should be > 0, this is a Skip Gram Negative model')
