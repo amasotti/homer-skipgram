@@ -37,7 +37,7 @@ just masks some random values in the tensor with a probability p passed as param
 
 #### Training phase (Loss)
 
-<img src="./data/assets/losses_train.png" alt="loss_train" style="width: 500px; height:250px" >
+<img src="./data/assets/losses_train_RMSop_optimizer" alt="loss_train" style="width: 500px; height:250px" >
 
 ### Predictions
 
