@@ -15,7 +15,7 @@ import torch.optim as optim
 from tqdm import tqdm, trange
 
 # intern imports
-from utils.dataset import trainDataset, make_batch
+from utils.dataset import trainDataset, make_batch, skip_gram_dataset
 from utils.modules import CBOW
 from utils.utils import print_test, save_model
 
@@ -46,10 +46,6 @@ with open(paths.vocab, "r", encoding="utf-8") as fp:
     vocab = json.load(fp)
 print("Vocabulary successfully loaded")
 
-# extract and save the dataset for training (only once, then load it)
-# skipDataset = skip_gram_dataset(corpus=corpus, word2index=word2index, window=7)
-# np.save(args.skipDataset, skipDataset,allow_pickle=True)
-
 # Load the Word2Index dictionary (see preprocessing.py in utils))
 with open(paths.word2index, "r", encoding="utf-8") as fp:
     word2index = json.load(fp)
@@ -57,6 +53,10 @@ print("Look-up dictionary successfully loaded")
 
 # Create a reverse lookup table
 index2word = {i: w for w, i in word2index.items()}
+
+# extract and save the dataset for training (only once, then load it)
+#skipDataset = skip_gram_dataset(corpus=corpus, word2index=word2index, window=5)
+#np.save(paths.skipDataset, skipDataset,allow_pickle=True)
 
 # Load tokenized corpus (see preprocessing.py in utils)
 skipDataset = np.load(paths.skipDataset, allow_pickle=True)
@@ -74,13 +74,13 @@ params = Namespace(
     train_size=0.7,
     shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
     drop_last=True,
-    batch=1024 * 4,
-    epochs=150,
+    batch=200,
+    epochs=70,
     lr=0.001,  # automatically adjusted with the scheduler while training
     device='cpu',
     cuda=False,
     embeddings=100,
-    show_stats_after=307,  # after how many batches should the bars be updated
+    show_stats_after=1500,  # after how many batches should the bars be updated
 )
 
 if torch.cuda.is_available():
@@ -174,8 +174,9 @@ for epoch in trange(params.epochs):
             # Run a small test
             print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
         # update bar
-        train_bar.set_postfix(loss=loss.item(), epoch=epoch)
-        train_bar.update()
+        if batch_idx % 100 == 0:
+            train_bar.set_postfix(loss=loss.item(), epoch=epoch)
+            train_bar.update(n=100)
 
     saved = save_model(model=model, epoch=epoch,losses=losses_train, fp=paths.model)
     # Load specific splitted dataset
@@ -204,9 +205,10 @@ for epoch in trange(params.epochs):
             # Run a small test:
             print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
 
-        # update bar
-        val_bar.set_postfix(loss=loss.item(), epoch=epoch)
-        val_bar.update(n=params.show_stats_after)
+        if batch_idx % 100 == 0:
+            # update bar
+            val_bar.set_postfix(loss=loss.item(), epoch=epoch)
+            val_bar.update(n=100)
 
     epoch_bar.update()
 
