@@ -31,7 +31,8 @@ paths = Namespace(
     vocab='./data/vocabs/Homer_word_frequencies.json',
     # Pytorch model
     #model='data/models/Skipgram_Pytorch_0502_beta.pth'
-    model='data/models/Skipgram_Pytorch_0502_gamma.pth'
+    model='data/models/Skipgram_Pytorch_0502_gamma.pth',
+    embeddings = "data/models/embeddings.txt"
 )
 
 # -------------------------------------------------------------------------
@@ -96,18 +97,18 @@ print(f"Using GPU ({params.device}) : {params.cuda}\n")
 Dataset = trainDataset(
     skipDataset, train_size=params.train_size)
 
+
 # make noise distribution to sample negative examples from
 word_freqs = np.array(list(vocab.values()))
 unigram_dist = word_freqs / sum(word_freqs)
-noise_dist = torch.from_numpy(
-    unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
+noise_dist = torch.from_numpy(unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
 
 model = CBOW(vocab_size=len(vocab),
              embeddings=params.embeddings,
              device=params.device,
-             noise_dist=noise_dist,
              negs=15,
-             batch_size=params.batch)
+             noise_dist=None
+             )
 
 # Load model
 saved = torch.load(os.path.join(paths.model))
@@ -216,6 +217,10 @@ for epoch in trange(params.epochs):
 if not saved:
     torch.save({'model_state_dict': model.state_dict(),
                 'losses': losses_train}, paths.model)
+
+model.save_embedding(index2word,paths.embeddings+".txt")
+embeddings = model.embeddings_target.weight.cpu().data.numpy
+np.save("./data/models/embeddings.npy",embeddings, allow_pickle=True)
 
 def plot_some(data):
     if len(data) < 1000:
