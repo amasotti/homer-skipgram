@@ -5,6 +5,7 @@ __date__ = 'january 2021'
 # Imports
 import json
 import os
+import random
 from argparse import Namespace
 
 import matplotlib.pyplot as plt  # for loss plotting
@@ -29,7 +30,8 @@ paths = Namespace(
     # Lookup word_with_frequencies (subsampled)
     vocab='./data/vocabs/Homer_word_frequencies.json',
     # Pytorch model
-    model='data/models/Skipgram_Pytorch_0502_beta.pth'
+    #model='data/models/Skipgram_Pytorch_0502_beta.pth'
+    model='data/models/Skipgram_Pytorch_0502_gamma.pth'
 )
 
 # -------------------------------------------------------------------------
@@ -104,11 +106,13 @@ model = CBOW(vocab_size=len(vocab),
              embeddings=params.embeddings,
              device=params.device,
              noise_dist=noise_dist,
-             negs=15)
+             negs=15,
+             batch_size=params.batch)
 
 # Load model
-ckpt = torch.load(os.path.join(paths.model))
-model.load_state_dict(ckpt['model_state_dict'])
+saved = torch.load(os.path.join(paths.model))
+model.load_state_dict(saved['model_state_dict'])
+print('Model loaded successfully')
 
 # move to cuda if available
 model.to(params.device)
@@ -116,12 +120,13 @@ model.to(params.device)
 print('\nMODEL SETTINGS:')
 print(model)
 
-losses_train = [0]
-losses_val = [0]
-optimizer = optim.Adam(model.parameters(), lr=params.lr)
+losses_train = [0] # loss each batch training
+losses_val = [0] # loss each batch validation
+
+optimizer = optim.RMSprop(model.parameters(), lr=params.lr, momentum=0.7,centered=True)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
                                                  mode="min",
-                                                 factor=0.3, patience=1)
+                                                 factor=0.3, patience=1, verbose=True)
 # Set bars
 
 epoch_bar = tqdm(desc="Epochs Routine", total=params.epochs,
@@ -172,9 +177,7 @@ for epoch in trange(params.epochs):
         train_bar.set_postfix(loss=loss.item(), epoch=epoch)
         train_bar.update()
 
-    saved = save_model(model=model, epoch=epoch,
-                       losses=losses_train, fp=paths.model)
-
+    saved = save_model(model=model, epoch=epoch,losses=losses_train, fp=paths.model)
     # Load specific splitted dataset
     Dataset.set_split('val')
     print(
@@ -212,11 +215,23 @@ if not saved:
     torch.save({'model_state_dict': model.state_dict(),
                 'losses': losses_train}, paths.model)
 
+def plot_some(data):
+    if len(data) < 1000:
+        return data
+    else:
+        random_idx = []
+        for i in range(1000):
+            r = random.randint(0, len(data))
+            if r not in random_idx:
+                random_idx.append(r)
+    return [data[j] for j in sorted(random_idx)]
+
+
 plt.figure(figsize=(100, 100))
 plt.xlabel("batches")
 plt.ylabel("batch_loss")
 plt.title("loss vs #batch -- Training")
-plt.plot(losses_train)
+plt.plot(plot_some(losses_train))
 plt.savefig('data/assets/losses_train.png')
 plt.show()
 
@@ -225,6 +240,6 @@ plt.xlabel("batches")
 plt.ylabel("batch_loss")
 plt.title("loss vs #batch -- Validation")
 
-plt.plot(losses_val)
+plt.plot(plot_some(losses_val))
 plt.savefig('data/assets/losses_val.png')
 plt.show()

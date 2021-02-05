@@ -9,6 +9,8 @@ The main goal was for me to improve my programming skills, have fun with ancient
 - `data/` : raw data and backups of models, vocabs and lists
   - `assets/` : summaries and plots
   - `models/` : model backup, for further trainig
+        + `Skipgram_Pytorch_0502_beta` : this model is the first one I started to train with very simple layers (just embeddings + 1 log_sigmoid). It is efficient, but I wanted to try more complex settings.
+        + `Skipgram_Pytorch_0502_gamma` : the second model I've trained. This model has a Dropout layer after the initialization of the input embds, that should improve the generalizability of a model. 
   - `raw_data/` : the text files with the original homeric texts, extracted from Perseus Library
   - `vocabs/` : vocabs and json backups
 - `preprocessing/` : python scripts for the initial stages of the NLP pipeline (tokenization, stopword deletion etc...)
@@ -24,11 +26,14 @@ The model implemented here is quite a vanilla Word2Vec Skipgram. I've however tr
 
                 P(w) = 1+ sqrt(freq(w) * 10e-3)) * 10e-3 / freq(w)
 
+- Split sets (training, validation): common practice in almost all Neural Networks implementations, but still I've seen many projects with just one set (training) implemented.
+
 - Negatives: in each steps the models changes the values for a small (15) number of negative context words (see paper by Levy & Goldberg).
 
 - Scheduler : the learning rate is not constant. The `ReduceLROnPlateau` scheduler (factor=`0.3`, patience=`1`) changes the learning rate if the loss doesn't improve.
 
-- Split sets (training, validation): common practice in almost all Neural Networks implementations, but still I've seen many projects with just one set (training) implemented.
+- Dropout layer added : some studies suggest that a further `F.dropout()` layer after the initialization of the input embeddings can help to avoid overfitting. The dropout layer
+just masks some random values in the tensor with a probability p passed as parameter. 
 
 #### Training phase (Loss)
 
