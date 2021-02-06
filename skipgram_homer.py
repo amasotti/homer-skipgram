@@ -30,10 +30,27 @@ paths = Namespace(
     # Lookup word_with_frequencies (subsampled)
     vocab='./data/vocabs/Homer_word_frequencies.json',
     # Pytorch model
-    #model='data/models/Skipgram_Pytorch_0502_beta.pth'
+    # model='data/models/Skipgram_Pytorch_0502_beta.pth'
     model='data/models/Skipgram_Pytorch_0502_gamma.pth',
-    embeddings = "data/models/embeddings.txt"
+    embeddings="data/models/embeddings.txt"
 )
+
+params = Namespace(
+    train_size=0.95,  # Currently not using the validation set so much, so I set the train_size to 90%
+    shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
+    drop_last=True,
+    batch=1000,
+    epochs=200,
+    lr=0.001,  # automatically adjusted with the scheduler while training
+    device='cpu',
+    cuda=False,
+    embeddings=100,
+    show_stats_after=1500,  # after how many batches should the bars be updated
+)
+
+# For testing while training
+TEST_WORDS = ['μηνιν', "εθηκε", "ερχομαι", "θεα", "υπνος",
+              "βροτον", "ευχομαι", "ερος", "φατο", "εφατʼ", "βασιληα"]
 
 # -------------------------------------------------------------------------
 #                   LOADING RAW DATA AND LOOK-UP TABLES
@@ -68,21 +85,6 @@ print("Dataset successfully loaded")
 #               SETTINGS FOR THE NEURAL MODEL
 # -------------------------------------------------------------------------
 
-TEST_WORDS = ['μηνιν', "εθηκε", "ερχομαι", "θεα", "υπνος",
-              "βροτον", "ευχομαι", "ερος", "φατο", "εφατʼ", "βασιληα"]
-
-params = Namespace(
-    train_size=0.7,
-    shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
-    drop_last=True,
-    batch=200,
-    epochs=70,
-    lr=0.001,  # automatically adjusted with the scheduler while training
-    device='cpu',
-    cuda=False,
-    embeddings=100,
-    show_stats_after=1500,  # after how many batches should the bars be updated
-)
 
 if torch.cuda.is_available():
     params.cuda = True
@@ -101,16 +103,17 @@ Dataset = trainDataset(
 # make noise distribution to sample negative examples from
 word_freqs = np.array(list(vocab.values()))
 unigram_dist = word_freqs / sum(word_freqs)
-noise_dist = torch.from_numpy(unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
+noise_dist = torch.from_numpy(
+    unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
 
 model = CBOW(vocab_size=len(vocab),
              embeddings=params.embeddings,
              device=params.device,
              negs=15,
-             noise_dist=None
+             noise_dist=noise_dist
              )
 
-# Load model
+# Load model if present
 saved = torch.load(os.path.join(paths.model))
 model.load_state_dict(saved['model_state_dict'])
 print('Model loaded successfully')
@@ -121,25 +124,22 @@ model.to(params.device)
 print('\nMODEL SETTINGS:')
 print(model)
 
-losses_train = [0] # loss each batch training
-losses_val = [0] # loss each batch validation
-
-optimizer = optim.RMSprop(model.parameters(), lr=params.lr, momentum=0.7,centered=True)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
-                                                 mode="min",
+optimizer = optim.Adamax(model.parameters(), lr=params.lr)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min",
                                                  factor=0.3, patience=1, verbose=True)
 # Set bars
 
 epoch_bar = tqdm(desc="Epochs Routine", total=params.epochs,
                  position=0, leave=True)
 train_bar = tqdm(desc="Training phase", total=Dataset.train_size /
-                 params.batch, position=2, leave=False)
+                 params.batch, position=0, leave=True)
 val_bar = tqdm(desc="Validatation phase", total=Dataset.val_size /
-               params.batch, position=2, leave=False)
+               params.batch, position=0, leave=True)
 
 # Make sure that the model is saved at least once
 saved = False
-
+losses_train = [0]  # loss each batch training
+losses_val = [0]  # loss each batch validation
 # AND ..... GO .....
 for epoch in trange(params.epochs):
     # Load specific splitted dataset
@@ -157,6 +157,7 @@ for epoch in trange(params.epochs):
                         drop_last=params.drop_last)
 
     # Batch for the training phase
+    train_bar.reset(total=Dataset._target_size / params.batch)
     for batch_idx, (inp, target) in enumerate(Loader):
         # Training modus (the test with the small word list requires setting the mode to eval)
         model.train()
@@ -164,22 +165,23 @@ for epoch in trange(params.epochs):
         # reset gradients
         optimizer.zero_grad()
         loss = model(inp, target)
+        losses_train.append(loss.item())
 
         loss.backward()
         optimizer.step()
-
-        losses_train.append(loss.item())
 
         # I want to know what are you doing...
         if batch_idx % params.show_stats_after == 0:
             # Run a small test
             print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
         # update bar
-        if batch_idx % 100 == 0:
+        if batch_idx % 200 == 0:
+            saved = save_model(model=model, epoch=epoch,
+                               losses=losses_train, fp=paths.model)
+            print("\n")
             train_bar.set_postfix(loss=loss.item(), epoch=epoch)
-            train_bar.update(n=100)
+            train_bar.update(n=200)
 
-    saved = save_model(model=model, epoch=epoch,losses=losses_train, fp=paths.model)
     # Load specific splitted dataset
     Dataset.set_split('val')
     print(
@@ -202,9 +204,9 @@ for epoch in trange(params.epochs):
         scheduler.step(losses_val[-1])
 
         # I want to know what are you doing...
-        if batch_idx % params.show_stats_after == 0:
-            # Run a small test:
-            print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
+        # if batch_idx % params.show_stats_after == 0:
+        # Run a small test:
+        #print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
 
         if batch_idx % 100 == 0:
             # update bar
@@ -218,9 +220,10 @@ if not saved:
     torch.save({'model_state_dict': model.state_dict(),
                 'losses': losses_train}, paths.model)
 
-model.save_embedding(index2word,paths.embeddings+".txt")
+# save as npy
 embeddings = model.embeddings_target.weight.cpu().data.numpy
-np.save("./data/models/embeddings.npy",embeddings, allow_pickle=True)
+np.save("./data/models/embeddings.npy", embeddings, allow_pickle=True)
+
 
 def plot_some(data):
     if len(data) < 1000:

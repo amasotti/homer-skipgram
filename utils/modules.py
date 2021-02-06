@@ -12,11 +12,24 @@ import torch.nn.functional as F
 from torch.nn import init
 
 
+def debug(desc, tensor, show=False):
+    '''
+    Show tensor shape
+
+    '''
+    if show:
+        print(f"------------------------------------------------------------------------\n \
+        {desc} : shape:{tensor.shape}\n------------------------------------------------------------------------------------\n\n")
+    else:
+        pass
+
+
 class CBOW(nn.Module):
     def __init__(self, vocab_size, embeddings, device='cpu', negs=15, noise_dist=None):
         super(CBOW, self).__init__()
 
         self.vocab_size = vocab_size
+        self.embd_size = embeddings
         self.negs = negs
         self.device = device
         self.noise_dist = noise_dist
@@ -27,41 +40,61 @@ class CBOW(nn.Module):
 
     def initialize_embeddings(self, emb_size):
         custom_range = 0.5 / emb_size
-        init.uniform_(self.embeddings_target.weight.data,  -custom_range, custom_range)
-        init.constant_(self.embeddings_context.weight.data, 0)
-
+        # Initialize embeddings for target words with values from the uniform distribution
+        init.uniform_(self.embeddings_target.weight.data,  -
+                      custom_range, custom_range)
+        # Fill the tensor with the given value
+        init.constant_(self.embeddings_context.weight.data, 1)
 
     def forward(self, target, context):
         # computing embeddings for target and context words
-        emb_input = self.embeddings_target(target)  # bs, emb_dim (4096,100)
-        emb_input = F.dropout(emb_input, 0.1) # mask some terms in the input to prevent overfitting (https://github.com/keras-team/keras/issues/7290)
-        emb_context = self.embeddings_context(context)  # bs, emb_dim (4096,100)
 
+        # Target word embedding : size (b_size, emb)
+        emb_input = self.embeddings_target(target)
+        debug("embedding input", emb_input)
+
+        # mask some terms in the input to prevent overfitting (https://github.com/keras-team/keras/issues/7290)
+        # emb_input = F.dropout(emb_input, 0.1) #Commented for now, since I think it makes the performance slightly worse
+
+        # Context word embedding (b_size, emb_dim)
+        emb_context = self.embeddings_context(
+            context)
+        debug("embedding context", emb_context)
+
+        # Multiply the two tensors together
+        emb_together = torch.mul(emb_input, emb_context)  # b_size, emb_dim
+        debug("First product of cont & input", emb_together)
+
+        # Sum the values obtained (sum over embeddings, reduce to a 1d tensor)
+        emb_together = torch.sum(emb_together, dim=1)  # batch_size
+
+        # Apply softmax
+        score = F.logsigmoid(emb_together)
+
+        # Now let's take care of the negatives
         if self.noise_dist is None:
             self.noise_dist = torch.ones(self.vocab_size)
         # Find out how many negative examples we need (here batch size * negs).
-        negs_number = context.shape[0] * self.negs
+        negs_number = context.shape[0] * self.negs  # int, emb_dim * negative
+
         # build negs example
-        negative_example = torch.multinomial(self.noise_dist, negs_number,replacement=True)  # coz bs*num_neg_samples > vocab_size
+        negative_example = torch.multinomial(
+            self.noise_dist, negs_number, replacement=True)  # emb_dim * negatives (1d tensor)
+        debug("negative_example", negative_example)
+
         # Move to cuda, without creating another tensor (viewes share the same underlying data with the copied tensors)
-        negative_example = negative_example.view(context.shape[0], self.negs).to(self.device)  # bs, num_neg_samples
-        # Calculate the embeddings
+        negative_example = negative_example.view(
+            context.shape[0], self.negs).to(self.device)  # bs, num_neg_samples
+
+        # Calculate the embeddings (as context)
         emb_neg = self.embeddings_target(negative_example)
+        debug("emb_neg", emb_neg)  # bs, neg, emb_dim
 
-        score = torch.sum(torch.mul(emb_input, emb_context),dim=1)
-        score = torch.clamp(score, max=10, min=-10)
-        score = -1 * F.logsigmoid(score)
+        neg_score = torch.bmm(
+            emb_neg, emb_input.unsqueeze(2))  # b_size, negs, 1
+        debug("neg_score after embedding", neg_score)
 
-        neg_score = torch.bmm(emb_neg, emb_input.unsqueeze(2)).squeeze()
-        neg_score = torch.clamp(neg_score, max=10, min=-10)
-        neg_score = -1 * torch.sum(F.logsigmoid(-neg_score), dim=1)
+        neg_score = F.logsigmoid(neg_score).squeeze(2).sum(1)  # b_size
+        debug("neg softmax", neg_score)
 
-        return torch.mean(score + neg_score)
-
-    def save_embedding(self, id2word, fp):
-        embedding = self.u_embeddings.weight.cpu().data.numpy()
-        with open(fp, 'w') as f:
-            f.write('%d %d\n' % (len(id2word), self.emb_dimension))
-            for wid, w in id2word.items():
-                e = ' '.join(map(lambda x: str(x), embedding[wid]))
-                f.write('%s %s\n' % (w, e))
+        return (-1 * (score + neg_score).mean())

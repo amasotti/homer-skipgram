@@ -11,24 +11,22 @@ def save_model(model, epoch, losses, fp):
     """
     Compare the actual and the last loss value. If the value improved, save the model
     """
-    if epoch >= 1:  # wait at least 1 epoch
+    if epoch > 0:  # wait at least 1 epoch
         print("Check if the model should be saved:")
         if losses[-1] < losses[-2]:
             print(
-                f"Loss in this epoch: {losses[-1]}\nLosses last epoch: {losses[-2]}\nImproved ? : {losses[-1] < losses[-2]:}")
-            print("Loss improved, save the model")
+                f"Loss improved of {losses[-1]-losses[-2]} points, save the model")
             torch.save({'model_state_dict': model.state_dict(),
                         'losses': losses}, fp)
             return True
         else:
             print(
-                f"Loss in this epoch: {losses[-1]}\nLosses last epoch: {losses[-2]}\nImproved ? : {losses[-1] < losses[-2]:}")
-            print("Loss didn't improve... let's wait another epoch")
+                f"Loss worsened by {losses[-1]-losses[-2]} points, skip saving")
             return False
 
 
 # TEST
-def nearest_word(target, embeddings, n=5):
+def nearest_word(target, embeddings, n=10):
     '''
     A kind of Projection formula, finds the closest vector in a vector space to the one given in input
 
@@ -53,8 +51,9 @@ def print_test(model, words, w2i, i2w, epoch):
 
     print('\n==============================================\n')
     for w in words:
+        # for each test word, select the corresponding embeddings from the model
         inp_emb = emb_matrix[w2i[w], :]
-
+        # use the nearest_word function to get the indices of the closest words and the euclidean distance (later ignored)
         emb_ranking_top, _ = nearest_word(
             target=inp_emb, embeddings=emb_matrix)
         with open("data/assets/skipgram_predictions.txt", 'a', encoding="utf-8") as fp:
