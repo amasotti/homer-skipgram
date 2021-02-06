@@ -16,7 +16,7 @@ from tqdm import tqdm, trange
 
 # intern imports
 from utils.dataset import trainDataset, make_batch, skip_gram_dataset
-from utils.modules import CBOW
+from utils.modules import SkipGram
 from utils.utils import print_test, save_model
 
 # Paths
@@ -36,7 +36,8 @@ paths = Namespace(
 )
 # Parameters for the Neural Network
 params = Namespace(
-    train_size=0.95,  # Currently not using the validation set so much, so I set the train_size to 90%
+    # Currently not using the validation set so much, but still useful to avoid overfitting and run the scheduler.
+    train_size=0.80,
     shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
     drop_last=True,
     batch=1000,
@@ -107,12 +108,12 @@ noise_dist = torch.from_numpy(
     unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
 
 # Initialize model
-model = CBOW(vocab_size=len(vocab),
-             embeddings=params.embeddings,
-             device=params.device,
-             negs=15,
-             noise_dist=noise_dist
-             )
+model = SkipGram(vocab_size=len(vocab),
+                 embeddings=params.embeddings,
+                 device=params.device,
+                 negs=15,
+                 noise_dist=noise_dist
+                 )
 
 # Load model if present
 saved = torch.load(os.path.join(paths.model))
@@ -139,7 +140,7 @@ train_bar = tqdm(desc="Training phase", total=Dataset.train_size /
 # Lists for keeping trace of the losses
 losses_train = [0]  # loss each batch training
 losses_val = [0]  # loss each batch validation
-
+losses_save = [10]  # look at this list and decide if the model improved or not
 
 # AND ..... GO .....
 
@@ -183,7 +184,7 @@ for epoch in trange(params.epochs):
         # update bar
         if batch_idx % 200 == 0:
             save_model(model=model, epoch=epoch,
-                       losses=losses_train, fp=paths.model)
+                       losses=losses_save, actual_loss=loss.item(), fp=paths.model)
             print("\n")
             train_bar.set_postfix(loss=loss.item(), epoch=epoch)
             train_bar.update(n=200)

@@ -7,21 +7,23 @@ import torch
 import numpy as np
 
 
-def save_model(model, epoch, losses, fp):
+def save_model(model, epoch, losses, actual_loss, fp):
     """
     Compare the actual and the last loss value. If the value improved, save the model
     """
     if epoch > 0:  # wait at least 1 epoch
-        print("Check if the model should be saved:")
-        if losses[-1] < losses[-2]:
+        print(f"Last best loss: {losses[-1]}")
+        print(f"Actual loss: {actual_loss}")
+        if actual_loss < losses[-1]:
             print(
-                f"Loss improved of {losses[-1]-losses[-2]} points, save the model")
+                f"Loss improved by {round(losses[-1]-actual_loss,4)} -> Save")
+            losses.append(actual_loss)
             torch.save({'model_state_dict': model.state_dict(),
                         'losses': losses}, fp)
             return True
         else:
             print(
-                f"Loss worsened by {losses[-1]-losses[-2]} points, skip saving")
+                f"Loss worsened by {round(losses[-1]-actual_loss,4)} -> Skip saving")
             return False
 
 

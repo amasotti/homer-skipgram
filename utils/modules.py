@@ -24,9 +24,9 @@ def debug(desc, tensor, show=False):
         pass
 
 
-class CBOW(nn.Module):
+class SkipGram(nn.Module):
     def __init__(self, vocab_size, embeddings, device='cpu', negs=15, noise_dist=None):
-        super(CBOW, self).__init__()
+        super(SkipGram, self).__init__()
 
         self.vocab_size = vocab_size
         self.embd_size = embeddings

@@ -16,6 +16,42 @@ The main goal was for me to improve my programming skills, have fun with ancient
 - `skipgram_homer.py` : the main file, containing the script to train the neural model
 - `skipgram_eval.ipynb` : some explorations and evaluations of the model (analogy, vector space, similarity queries...)
 
+## How to run
+
+The model was already tested and trained but is still a kind of work in progress. At the moment it lacks a user interface. But you can still run the python scripts in your terminal / IDE:
+
+**Build the corpus**:
+
+Make sure to have a cleaned raw_text (see [my other repo](https://github.com/amasotti/AncientGreek_NLP) for some tools). Then you can tokenize the text and build the vocabularies by running:
+
+      python3 ./preprocessing/preprocessing.py
+
+just edit the `args Namespace` with your own paths:
+
+```python
+args = Namespace(
+    raw_data="../data/raw_data/HomerGesamt_deaccented.txt",
+    word2index="../data/vocabs/Homer_word2index.json",
+    word_frequencies="../data/vocabs/Homer_word_frequencies.json"
+)
+```
+
+`raw_data` points to the raw text, the other two are paths to save the vocabularies created.
+
+**Build the SkipGram dataset**
+
+The function `skip_gram_dataset(corpus, word2index, window=5)` in `utils/dataset.py` builds the skipgram trainable dataset. It requires a corpus with tokenized sentences (see above), the word2index lookup dictionary and the window size (an integer of your choice).
+
+** Run the model **
+
+`skipgram_homer.py` contains all the necessary functions to train the neural network. You can adjust the hyperparameters in the argparse.Namespace a the beginning of the file.
+The model will be saved automatically if the loss improves. At the end of the traing phase it will show a plot of the loss/batches.
+While training it will display (once in 1500 minibatches, customizable) the most similar words for a small set of test words declared in the main file. I found this a nice feature to implement, since it allows you to see improvements (ideally) in real-time.
+
+** Explore the results **
+
+Have a look at the Jupyter Notebook `skipgram_eval.ipynb`.
+
 ## Important hyperparameters
 
 The model implemented here is quite a vanilla Word2Vec Skipgram. I've however tried to improve some parameters taking into account some suggestions from the literature:
@@ -49,3 +85,7 @@ The model implemented here is quite a vanilla Word2Vec Skipgram. I've however tr
 ## Requirements
 
 see the `requirements.txt` (**NB:** the file was automatically generated with `pip freeze` and contains many dependencies, that are not strictly needed).
+
+```
+
+```
