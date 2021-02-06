@@ -14,7 +14,7 @@ from torch.nn import init
 
 def debug(desc, tensor, show=False):
     '''
-    Show tensor shape
+    Show the shape of each tensor if show=True
 
     '''
     if show:
@@ -44,11 +44,10 @@ class SkipGram(nn.Module):
         init.uniform_(self.embeddings_target.weight.data,  -
                       custom_range, custom_range)
         # Fill the tensor with the given value
-        init.constant_(self.embeddings_context.weight.data, 1)
+        init.constant_(self.embeddings_context.weight.data, 0)
 
     def forward(self, target, context):
         # computing embeddings for target and context words
-
         # Target word embedding : size (b_size, emb)
         emb_input = self.embeddings_target(target)
         debug("embedding input", emb_input)
@@ -70,6 +69,7 @@ class SkipGram(nn.Module):
 
         # Apply softmax
         score = F.logsigmoid(emb_together)
+        debug("score before negatives", score)  # bs
 
         # Now let's take care of the negatives
         if self.noise_dist is None:
@@ -77,7 +77,7 @@ class SkipGram(nn.Module):
         # Find out how many negative examples we need (here batch size * negs).
         negs_number = context.shape[0] * self.negs  # int, emb_dim * negative
 
-        # build negs example
+        # build negs example (take random words from the corpus and adjust their weights)
         negative_example = torch.multinomial(
             self.noise_dist, negs_number, replacement=True)  # emb_dim * negatives (1d tensor)
         debug("negative_example", negative_example)
@@ -94,7 +94,10 @@ class SkipGram(nn.Module):
             emb_neg, emb_input.unsqueeze(2))  # b_size, negs, 1
         debug("neg_score after embedding", neg_score)
 
-        neg_score = F.logsigmoid(neg_score).squeeze(2).sum(1)  # b_size
-        debug("neg softmax", neg_score)
+        neg_score = neg_score.squeeze(2).sum(1)
+        debug("reduce dim of neg_score", neg_score)  # bsize
+
+        neg_score = F.logsigmoid(neg_score)
+        debug("neg_score logsigmoid", neg_score)
 
         return (-1 * (score + neg_score).mean())

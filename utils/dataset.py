@@ -6,6 +6,7 @@ Functions and classes to build a trainable Dataset
 from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset, DataLoader
+import random
 
 
 def skip_gram_dataset(corpus, word2index, window=5):
@@ -39,7 +40,7 @@ class trainDataset(Dataset):
 
     def __init__(self, data, train_size=0.7):
         super(Dataset, self).__init__()
-        #self.data = torch.tensor(data, dtype=torch.long)
+        self.data = data
         self.data_size = len(data)
         self._target_df = None
         self._target_size = 0
@@ -50,7 +51,7 @@ class trainDataset(Dataset):
 
         # split the data
         self.train_set, self.val_set = self.split_data(
-            data=data, train_size=self.train_size)
+            train_size=self.train_size)
         self.lookup = {
             'train': (self.train_set, self.train_size),
             'val': (self.val_set, self.val_size)
@@ -59,17 +60,18 @@ class trainDataset(Dataset):
         # Set training subset as target when initializing the Dataset
         self.set_split()
 
-    def split_data(self, data, train_size):
+    def split_data(self, train_size):
         """
         Called only once at the beginning, given the data list returns three splitted sets
         for the three phases: training and validation
 
-        #TODO: Do we need a test set here?
-
         """
-
+        data = self.data
+        print("Shuffling the data ... wait a minute")
+        random.shuffle(data)
         train_set = data[:train_size]
-        train_set = torch.tensor(train_set, dtype=torch.long)
+        train_set = torch.tensor(
+            train_set, dtype=torch.long)
 
         val_set = data[train_size:]
         val_set = torch.tensor(val_set, dtype=torch.long)
@@ -90,9 +92,11 @@ class trainDataset(Dataset):
 
         """
 
+        # index = the current pair (center_w, context_w) to analyze, 0 = take the center_w
         x = self._target_df[index, 0]
+        # index = the current pair (center_w, context_w) to analyze, 1 = take the context_w
         y = self._target_df[index, 1]
-        return x, y
+        return x, y  # this will be used by the generator later on
 
     def __len__(self):
         return self._target_size

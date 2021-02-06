@@ -30,22 +30,24 @@ paths = Namespace(
     # Lookup word_with_frequencies (subsampled)
     vocab='./data/vocabs/Homer_word_frequencies.json',
     # Pytorch model
-    # model='data/models/Skipgram_Pytorch_0502_beta.pth'
-    model='data/models/Skipgram_Pytorch_0502_gamma.pth',
+    model='data/models/Skipgram_Pytorch_0602_delta.pth',
+    # model='data/models/Skipgram_Pytorch_0502_gamma.pth',
     embeddings="data/models/embeddings.txt"
 )
 # Parameters for the Neural Network
 params = Namespace(
+    load_model=False,
     # Currently not using the validation set so much, but still useful to avoid overfitting and run the scheduler.
-    train_size=0.80,
-    shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
+    train_size=0.90,
+    # Already shuffled when creating the dataset (both training and validation)
+    shuffle=False,
     drop_last=True,
     batch=1000,
     epochs=200,
     lr=0.001,  # automatically adjusted with the scheduler while training
     device='cpu',
     cuda=False,
-    embeddings=100,
+    embeddings=250,
     show_stats_after=1500,  # after how many mini-batches should the progress bars be updated
 )
 
@@ -107,18 +109,23 @@ unigram_dist = word_freqs / sum(word_freqs)
 noise_dist = torch.from_numpy(
     unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
 
-# Initialize model
+# -------------------------------------------------------------------------
+#                           INITIALIZE MODEL
+# -------------------------------------------------------------------------
 model = SkipGram(vocab_size=len(vocab),
                  embeddings=params.embeddings,
                  device=params.device,
-                 negs=15,
-                 noise_dist=noise_dist
+                 negs=50,
+                 noise_dist=None  # train without noising at beginning, then you can add noise
                  )
 
 # Load model if present
-saved = torch.load(os.path.join(paths.model))
-model.load_state_dict(saved['model_state_dict'])
-print('Model loaded successfully')
+if params.load_model:
+    saved = torch.load(os.path.join(paths.model))
+    model.load_state_dict(saved['model_state_dict'])
+    print('Model loaded successfully')
+else:
+    print("Creating new model from scratch...")
 
 # move to cuda if available
 model.to(params.device)
@@ -128,8 +135,8 @@ print(model)
 
 # Optimizer and scheduler
 optimizer = optim.Adamax(model.parameters(), lr=params.lr)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min",
-                                                 factor=0.3, patience=1, verbose=True)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min", threshold=1e-4, cooldown=2,
+                                                 factor=0.95, patience=2, min_lr=1e-09)  # small decay if loss doesn't decrease
 # Set progress bars
 epoch_bar = tqdm(desc="Epochs Routine", total=params.epochs,
                  position=0, leave=True)
@@ -140,7 +147,9 @@ train_bar = tqdm(desc="Training phase", total=Dataset.train_size /
 # Lists for keeping trace of the losses
 losses_train = [0]  # loss each batch training
 losses_val = [0]  # loss each batch validation
-losses_save = [10]  # look at this list and decide if the model improved or not
+# look at this list and decide if the model improved or not
+# start saving if the loss is smaller than this initial value
+losses_save = [2e-01]
 
 # AND ..... GO .....
 
@@ -171,6 +180,7 @@ for epoch in trange(params.epochs):
 
         # reset gradients
         optimizer.zero_grad()
+
         loss = model(inp, target)
         losses_train.append(loss.item())
 
@@ -185,8 +195,15 @@ for epoch in trange(params.epochs):
         if batch_idx % 200 == 0:
             save_model(model=model, epoch=epoch,
                        losses=losses_save, actual_loss=loss.item(), fp=paths.model)
+            # Print actual learning rate
+            for group in optimizer.param_groups:
+                try:
+                    actual_lr = group['lr']
+                except:
+                    actual_lr = 'unknown'
             print("\n")
-            train_bar.set_postfix(loss=loss.item(), epoch=epoch)
+            train_bar.set_postfix(
+                loss=loss.item(), epoch=epoch, lr=actual_lr)
             train_bar.update(n=200)
             print("\n")
 
