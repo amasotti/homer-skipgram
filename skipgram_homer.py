@@ -19,7 +19,7 @@ from utils.dataset import trainDataset, make_batch, skip_gram_dataset
 from utils.modules import CBOW
 from utils.utils import print_test, save_model
 
-# popular words
+# Paths
 paths = Namespace(
     # tokenized Ilias & Odyssey (list of lists, each list 1 sentence)
     corpus="./data/Homer_tokenized_corpus.npy",
@@ -34,7 +34,7 @@ paths = Namespace(
     model='data/models/Skipgram_Pytorch_0502_gamma.pth',
     embeddings="data/models/embeddings.txt"
 )
-
+# Parameters for the Neural Network
 params = Namespace(
     train_size=0.95,  # Currently not using the validation set so much, so I set the train_size to 90%
     shuffle=False,  # TODO: Although it's a good idea to shuffle the batches, I have the problem that the whole dataset is shuffled per default and then I get a out of bound error
@@ -45,7 +45,7 @@ params = Namespace(
     device='cpu',
     cuda=False,
     embeddings=100,
-    show_stats_after=1500,  # after how many batches should the bars be updated
+    show_stats_after=1500,  # after how many mini-batches should the progress bars be updated
 )
 
 # For testing while training
@@ -85,7 +85,7 @@ print("Dataset successfully loaded")
 #               SETTINGS FOR THE NEURAL MODEL
 # -------------------------------------------------------------------------
 
-
+# Check if we can use the GPU
 if torch.cuda.is_available():
     params.cuda = True
     params.device = 'cuda'
@@ -106,6 +106,7 @@ unigram_dist = word_freqs / sum(word_freqs)
 noise_dist = torch.from_numpy(
     unigram_dist ** (0.75) / np.sum(unigram_dist ** (0.75)))
 
+# Initialize model
 model = CBOW(vocab_size=len(vocab),
              embeddings=params.embeddings,
              device=params.device,
@@ -124,27 +125,31 @@ model.to(params.device)
 print('\nMODEL SETTINGS:')
 print(model)
 
+# Optimizer and scheduler
 optimizer = optim.Adamax(model.parameters(), lr=params.lr)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min",
                                                  factor=0.3, patience=1, verbose=True)
-# Set bars
-
+# Set progress bars
 epoch_bar = tqdm(desc="Epochs Routine", total=params.epochs,
                  position=0, leave=True)
 train_bar = tqdm(desc="Training phase", total=Dataset.train_size /
                  params.batch, position=0, leave=True)
-val_bar = tqdm(desc="Validatation phase", total=Dataset.val_size /
-               params.batch, position=0, leave=True)
 
-# Make sure that the model is saved at least once
-saved = False
+
+# Lists for keeping trace of the losses
 losses_train = [0]  # loss each batch training
 losses_val = [0]  # loss each batch validation
+
+
 # AND ..... GO .....
+
+
+# -------------------------------------------------------------------------
+#                           TRAINING PHASE
+# -------------------------------------------------------------------------
 for epoch in trange(params.epochs):
     # Load specific splitted dataset
     Dataset.set_split('train')
-    model.train()
     print(
         f'DATASET SUBSET LOADED : {Dataset._target_split} with size : {len(Dataset)}')
     print('Whole Dataset size: ', Dataset.data_size)
@@ -158,6 +163,7 @@ for epoch in trange(params.epochs):
 
     # Batch for the training phase
     train_bar.reset(total=Dataset._target_size / params.batch)
+    print("\n")
     for batch_idx, (inp, target) in enumerate(Loader):
         # Training modus (the test with the small word list requires setting the mode to eval)
         model.train()
@@ -176,11 +182,12 @@ for epoch in trange(params.epochs):
             print_test(model, TEST_WORDS, word2index, index2word, epoch=epoch)
         # update bar
         if batch_idx % 200 == 0:
-            saved = save_model(model=model, epoch=epoch,
-                               losses=losses_train, fp=paths.model)
+            save_model(model=model, epoch=epoch,
+                       losses=losses_train, fp=paths.model)
             print("\n")
             train_bar.set_postfix(loss=loss.item(), epoch=epoch)
             train_bar.update(n=200)
+            print("\n")
 
     # Load specific splitted dataset
     Dataset.set_split('val')
@@ -197,6 +204,11 @@ for epoch in trange(params.epochs):
 
     # Evaluation / Validation mode
     model.eval()
+
+    # Set validation bar
+    val_bar = tqdm(desc="Validatation phase", total=(
+        Dataset._target_size / params.batch), position=0, leave=True)
+
     for batch_idx, (inp, target) in enumerate(Loader):
 
         loss = model(inp, target)
@@ -214,11 +226,6 @@ for epoch in trange(params.epochs):
             val_bar.update(n=100)
 
     epoch_bar.update()
-
-# If the model wasn't saved at all, save it now
-if not saved:
-    torch.save({'model_state_dict': model.state_dict(),
-                'losses': losses_train}, paths.model)
 
 # save as npy
 embeddings = model.embeddings_target.weight.cpu().data.numpy
