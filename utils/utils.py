@@ -3,70 +3,53 @@ Auxiliary functions
 
 """
 
-import torch
 import numpy as np
-
-
-def save_model(model, epoch, losses, actual_loss, fp):
-    """
-    Compare the actual and the last loss value. If the value improved, save the model
-    """
-    if epoch > 0:  # wait at least 1 epoch
-        if actual_loss > 0:  # or it will stagnate and never save
-            print(f"Last best loss: {losses[-1]}")
-            print(f"Actual loss: {actual_loss}")
-            if actual_loss < losses[-1]:
-                print(
-                    f"Loss improved by {round(losses[-1]-actual_loss,4)} -> Save")
-                losses.append(actual_loss)
-                torch.save({'model_state_dict': model.state_dict(),
-                            'losses': losses}, fp)
-            else:
-                print(
-                    f"Loss worsened by {round(losses[-1]-actual_loss,4)} -> Skip saving")
-
+import torch
 
 # TEST
-def nearest_word(target, embeddings, n=10):
-    '''
-    A kind of Projection formula, finds the closest vector in a vector space to the one given in input
-
-    '''
-    # calculate distance between target and embeddings
-    # calc the distance of all vectors from the target
-    distance = np.linalg.norm(target - embeddings, axis=1)
-
-    # select the indx of the n closest
-    idx_next_words = np.argsort(distance)[:n]
-
-    # select only the vectors in the precedently found array
-    distances = distance[idx_next_words]
-
-    return idx_next_words, distances
 
 
-def print_test(model, words, w2i, i2w, epoch):
+def nearest_word(target, embeddings, n=10, metrics="cosine"):
+    """
+    Return the n most similar words in the embedding matrix.
+    Similarity is calculated as cosine similarity
+
+    """
+    if metrics == "cosine":
+        # calculate cosine similarity between target word and each word in the embd matrix
+        similarities = torch.cosine_similarity(target, embeddings, dim=-1)
+        idx_most_similar = torch.topk(similarities, k=n).indices
+        return idx_most_similar.tolist()
+    elif metrics == "euclidean":
+        distance = np.linalg.norm(target - embeddings, axis=1)
+        # select the indx of the n closest
+        idx_most_similar = np.argsort(distance)[:n]
+        # select only the vectors in the precedently found array
+        distances = distance[idx_most_similar]
+        return idx_most_similar
+
+
+def print_test(model, words, w2i, i2w, epoch, save=False, n=10, metrics="cosine"):
     model.eval()
-    emb_matrix = model.embeddings_target.weight.data.cpu()
-    nearest_words_dict = {}
-
+    emb_matrix = model.emb_context.weight.data.cpu()
     print('\n==============================================\n')
     for w in words:
-        # for each test word, select the corresponding embeddings from the model
-        inp_emb = emb_matrix[w2i[w], :]
-        # use the nearest_word function to get the indices of the closest words and the euclidean distance (later ignored)
-        emb_ranking_top, _ = nearest_word(
-            target=inp_emb, embeddings=emb_matrix)
+        try:
+            # for each test word, select the corresponding embeddings from the model
+            inp_emb = emb_matrix[w2i[w], :]
+            # use the nearest_word function to get the indices of the closest words and the euclidean distance (later ignored)
+            emb_ranking_top = nearest_word(
+                target=inp_emb, embeddings=emb_matrix, n=n, metrics=metrics)
+            if save:
+                with open("data/assets/skipgram_predictions.txt", 'a', encoding="utf-8") as fp:
+                    fp.write(
+                        f"Epoch: {epoch}:\n{w.ljust(10)} |  {', '.join([i2w[i] for i in emb_ranking_top])}\n")
+
+            # Print on the console for debug / curiosity
+            print(w.ljust(10), ' | ', ', '.join(
+                [i2w[i] for i in emb_ranking_top[1:]]))
+        except KeyError:
+            print("Word not found")
+    if save:
         with open("data/assets/skipgram_predictions.txt", 'a', encoding="utf-8") as fp:
-            fp.write(
-                f"Epoch: {epoch}:\n{w.ljust(10)} |  {', '.join([i2w[i] for i in emb_ranking_top[1:]])}\n")
-
-        # Print on the console for debug / curiosity
-        print(w.ljust(10), ' | ', ', '.join(
-            [i2w[i] for i in emb_ranking_top[1:]]))
-
-    with open("data/assets/skipgram_predictions.txt", 'a', encoding="utf-8") as fp:
-        fp.write(
-            "\n----------------------------------------------------------------\n")
-
-    return nearest_words_dict
+            fp.write("\n" + "="*20 + "\n")

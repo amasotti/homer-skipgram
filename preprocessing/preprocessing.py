@@ -7,22 +7,22 @@ __author__ = "Antonio Masotti"
 __date__ = "Febrauar 2021"
 
 import json
+import numpy as np
+import math
+import random
 from argparse import Namespace
 from cltk.tokenize.sentence import TokenizeSentence
 from cltk.tokenize.word import WordTokenizer
+from numpy.testing._private.utils import decorate_methods
 from tqdm import tqdm
 
-from utils.utils import *
 # Paths (I hate to have constantly to write paths...)
 args = Namespace(
-    raw_data="../data/raw_data/HomerGesamt_deaccented.txt",
-    word2index="../data/vocabs/Homer_word2index.json",
-    word_frequencies="../data/vocabs/Homer_word_frequencies.json"
+    raw_data="../data/raw_data/HomerGesamt_cleaned.txt",
+    word2index="../data/vocabs/Homer_word2index_accented.json",
+    word_frequencies="../data/vocabs/Homer_word_frequencies_accented.json",
+    subsampling_vocab="../data/vocabs/Homer_subsampled.json"
 )
-
-# Load data
-with open(args.raw_data, 'r', encoding='utf-8') as src:
-    data = src.read()
 
 
 def createCorpus(text, save=True):
@@ -34,12 +34,13 @@ def createCorpus(text, save=True):
 
     '''
     # load stopwords
-    with open('../../data/stopwords.txt', 'r', encoding="UTF-8") as src:
+    with open('../data/stopwords.txt', 'r', encoding="UTF-8") as src:
         stopwords = src.read()
 
     # add punctuation signs
     stopwords = stopwords.split('\n')
-    stopwords.extend([".", ",", "?", "!", "-", ":", ";", "·"])
+    stopwords.extend([".", ",", "?", "!", "-", ":",
+                      ";", "·", "”", "“", "«", "»"])
 
     # tokenize sentences and then words
     Stokenizer = TokenizeSentence('greek')
@@ -50,26 +51,36 @@ def createCorpus(text, save=True):
     vocab = dict()
 
     print('Building corpus and freqDictionary')
+    total_tokens = 0
+    check = 0
     # for each sentence
     for sent in tqdm(sentences, desc="Sentences"):
         # extract the words
         new_sent = Wtokenizer.tokenize(sent)
+        check += len(new_sent)
         # Stopword deletion
         new_sent = [w for w in new_sent if w not in stopwords]
         new_sentences.append(new_sent)
+        total_tokens += len(new_sent)
         # add each word to dictionary or update count
         for w in new_sent:
+            # Increment tokens count
             if w not in vocab:
                 vocab[w] = 1
             else:
                 vocab[w] += 1
     vocab_size = len(vocab)
 
-    # Subsampling, see paper by Goldberg & Levy
+    print("total tokens: ", total_tokens)
+    print("total token (incl. stopwords)", check)
+    print("vocab_size : ", vocab_size)
+    # Subsampling
+    treshold = 10e-05
     for k, v in vocab.items():
-        frac = v / vocab_size
-        p_w = (1+np.sqrt(frac * 0.001)) * 0.001 / frac
-        # update the value for the word
+        # http: // mccormickml.com/2017/01/11/word2vec-tutorial-part-2-negative-sampling/
+        # Not really used for subsampling here but to generate the noise distribution
+        frac = v / total_tokens
+        p_w = (1 + math.sqrt(frac/treshold)) * (treshold/frac)
         vocab[k] = p_w
 
     if save:
@@ -79,17 +90,25 @@ def createCorpus(text, save=True):
 
         print('Saving the corpus')
         arr = np.array(new_sentences, dtype=object)
-        np.save('../../data/Homer_tokenized_corpus.npy', arr)
+        np.save('../data/Homer_tokenized_accented.npy', arr)
+
+        with open('../data/vocabs/Homer_wordList.csv', "w", encoding="utf-8") as fp:
+            for idx, word in tqdm(enumerate(vocab)):
+                fp.write(str(idx) + "," + word + "\n")
 
     return new_sentences, vocab
 
 
-# tokenize and build corpus and freqDict from text
-corpus, freqVocab = createCorpus(data)
+if __name__ == '__main__':
+    import os
+    # Load data
+    with open(args.raw_data, 'r', encoding='utf-8') as src:
+        data = src.read()
+    corpus, freq_vocab = createCorpus(text=data, save=True)
 
-# Lookup tables
-word2index = {w: i for i, w in enumerate(freqVocab.keys())}
+    # Lookup tables
+    word2index = {w: i for i, w in enumerate(freq_vocab.keys())}
 
-# save lookup dictionary
-with open(args.word2index, 'w', encoding='utf-8') as fp:
-    json.dump(word2index, fp, ensure_ascii=False)
+    # save lookup dictionary
+    with open(args.word2index, 'w', encoding='utf-8') as fp:
+        json.dump(word2index, fp, ensure_ascii=False)
