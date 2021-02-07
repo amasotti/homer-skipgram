@@ -39,15 +39,16 @@ params = Namespace(
     # Already shuffled when creating the dataset (both training and validation)
     shuffle=False,
     drop_last=True,
-    batch=1000,
-    epochs=2,
+    batch=1024,
+    epochs=300,
     embeddings=250,
-    neg_sample=15,
+    neg_sample=50,
     lr=0.001,  # automatically adjusted with the scheduler while training
     lr_decay=0.97,
     device='cpu',
     cuda=False,
     show_stats_after=1500,  # after how many mini-batches should the progress bars be updated
+    draw_tsne=True  # Pretty cool visualization but be aware that TSNE dim reduction could take several minuts for large tensors!
 )
 
 # Check if we can use the GPU
@@ -137,12 +138,13 @@ train_model(model=model,
 #                     VISUALIZATION
 # ---------------------------------------------------------
 
-embeddings = model.emb_context.weight.data.cpu()
-
-emb_tensors = tsne_reduction(embeddings, perplexity=20)
-dataframe = make_dataframe(emb_tensors, word2index)
-draw_tsne(df=dataframe,
-          fp=paths.tsne_plot,
-          alpha=0.9,
-          show=True
-          )
+if params.draw_tsne:
+    embeddings = model.emb_context.weight.data.cpu()
+    emb_tensors = tsne_reduction(
+        embeddings, perplexity=15, metrics="euclidean")
+    dataframe = make_dataframe(emb_tensors, word2index)
+    draw_tsne(df=dataframe,
+              fp=paths.tsne_plot,
+              alpha=0.9,
+              show=True
+              )

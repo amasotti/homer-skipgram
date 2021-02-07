@@ -191,7 +191,6 @@ def plot_loss(losses, path):
     plt.xlabel("batches")
     plt.ylabel("batch_loss")
     plt.title("loss vs #batch -- Training")
-    x = plt.plot(plot_some(losses))
+    plt.plot(plot_some(losses))
     plt.savefig(path)
     plt.show()
-    return x

@@ -65,13 +65,13 @@ def print_test(model, words, w2i, i2w, epoch, save=False, n=10, metrics="cosine"
             fp.write("\n" + "="*20 + "\n")
 
 
-def tsne_reduction(embeddings, perplexity=20):
+def tsne_reduction(embeddings, perplexity=20, metrics="euclidean"):
     scaler = StandardScaler()
     tsne = TSNE(n_components=2,
                 perplexity=perplexity,
-                metrics="euclidean",
-                verbose=2,
-                n_iter=4)
+                metric=metrics,
+                verbose=3,
+                n_iter=500)
     vectors_tsne = tsne.fit_transform(embeddings)
     vectors_tsne = scaler.fit_transform(vectors_tsne)
     return vectors_tsne
@@ -86,12 +86,13 @@ def make_dataframe(vectors_tsne, word2index):
 def draw_tsne(df, fp, alpha=0.69, width=600, height=400, show=True, title="Homer Embeddings"):
     """ draws an interactive plot for data points with auxilirary info on hover """
     output_file(fp, title=title)
-    src = bm.ColumnDataSource(df)
 
+    src = bm.ColumnDataSource(df)
+    y = df['y']
     mapper = linear_cmap(
         field_name='y', palette=Category20_9, low=min(y), high=max(y))
-    fig = pl.figure(active_scroll='wheel_zoom', width=width,
-                    height=height, title=title)
+    fig = pl.figure(active_scroll='wheel_zoom',
+                    width=width, height=height, title=title)
 
     fig.scatter('x', 'y',
                 size=10,
