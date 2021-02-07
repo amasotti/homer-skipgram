@@ -81,7 +81,7 @@ def lookup_tables(path):
 # -------------------------------------------------------------------------
 # For testing while training
 TEST_WORDS = ["εἶμι", "θεός", "θεά", "ἔρχομαι",
-              "ἔβην", "ἦλθε", "θυμόν", "γλαυκῶπις"]
+              "ἔβην", "ἦλθε", "θυμόν", "γλαυκῶπις", "ἔρος"]
 
 
 def switch_phase(dataset, params, vocab, train_bar, phase="train"):
@@ -109,9 +109,9 @@ def train_model(model, dataset, vocab, optimizer, scheduler, word2index, index2w
                      params.batch, position=1, leave=True)
 
     # Loss
-    losses_train = []
-    losses_val = []
-    best_loss = [2.9]
+    losses_train = [4]
+    losses_val = [4]
+    best_loss = [4]
     batch_counter = 0  # as x_axis in tensorboard
 
     for epoch in trange(params.epochs):
@@ -195,6 +195,3 @@ def plot_loss(losses, path):
     plt.savefig(path)
     plt.show()
     return x
-
-
-# TODO: Use tensorboard to save summaries)

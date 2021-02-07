@@ -4,10 +4,10 @@ Actual training loop
 inspired by [Pytorch implements Word2vec](https://programmer.group/pytorch-implements-word2vec.html)
 
 """
+from utils.utils import draw_tsne, make_dataframe, tsne_reduction
 from utils.dataset import trainDataset
 import torch
 import torch.optim as optim
-import os
 import numpy as np
 from argparse import Namespace
 from utils.modules import SkipGram
@@ -23,9 +23,10 @@ paths = Namespace(
     skipDataset="./data/Homer_skipgram_dataset_accented.npy",
     vocab='./data/vocabs/Homer_word_frequencies_accented.json',
     # Pytorch model
-    model='data/models/Skipgram_Pytorch_0602_gamma.pth',
+    model='data/models/Skipgram_Pytorch_0602_delta.pth',
     embeddings="data/models/embeddings.npy",
-    plots="data/assets/losses_plot.png"
+    plots="data/assets/losses_plot.png",
+    tsne_plot="data/assets/tsne_plot.html"
 )
 
 # Parameters for the Neural Network
@@ -38,8 +39,8 @@ params = Namespace(
     # Already shuffled when creating the dataset (both training and validation)
     shuffle=False,
     drop_last=True,
-    batch=2000,
-    epochs=100,
+    batch=1000,
+    epochs=2,
     embeddings=250,
     neg_sample=15,
     lr=0.001,  # automatically adjusted with the scheduler while training
@@ -130,3 +131,18 @@ train_model(model=model,
             word2index=word2index,
             index2word=index2word,
             plot=True)
+
+
+# ---------------------------------------------------------
+#                     VISUALIZATION
+# ---------------------------------------------------------
+
+embeddings = model.emb_context.weight.data.cpu()
+
+emb_tensors = tsne_reduction(embeddings, perplexity=20)
+dataframe = make_dataframe(emb_tensors, word2index)
+draw_tsne(df=dataframe,
+          fp=paths.tsne_plot,
+          alpha=0.9,
+          show=True
+          )

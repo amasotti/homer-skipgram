@@ -13,7 +13,8 @@ The main goal was for me to improve my programming skills, have fun with ancient
   - `vocabs/` : vocabs and json backups
 - `preprocessing/` : python scripts for the initial stages of the NLP pipeline (tokenization, stopword deletion etc...)
 - `utils/` : auxiliary files and script, mostly used to build the ngrams and the Dataset for the NN
-- `skipgram_homer.py` : the main file, containing the script to train the neural model
+- `skipgram_homer.py` : the main file, containing the script to train the neural model and some auxiliary functions (dataset constructor)
+- `train_skipgram.py` : the main access point of the project. It contains the customizable parameters and the training loop.
 - `skipgram_eval.ipynb` : some explorations and evaluations of the model (analogy, vector space, similarity queries...)
 
 ## How to run
@@ -44,7 +45,9 @@ The function `skip_gram_dataset(corpus, word2index, window=5)` in `utils/dataset
 
 ** Run the model **
 
-`skipgram_homer.py` contains all the necessary functions to train the neural network. You can adjust the hyperparameters in the argparse.Namespace a the beginning of the file.
+`skipgram_homer.py` contains all the necessary functions to train the neural network.
+
+`train_skipgram.py` : You can adjust the hyperparameters in the argparse and paths Namespaces a the beginning of the file and run this file to train the model.
 The model will be saved automatically if the loss improves. At the end of the traing phase it will show a plot of the loss/batches.
 While training it will display (once in 1500 minibatches, customizable) the most similar words for a small set of test words declared in the main file. I found this a nice feature to implement, since it allows you to see improvements (ideally) in real-time.
 
@@ -58,7 +61,9 @@ The model implemented here is quite a vanilla Word2Vec Skipgram. I've however tr
 
 - Subsampling : instead of using pure counts/frequency based vocabularies for the model, I've implemented the sub-sampling formula according to which the P value for each token is the following:
 
-                P(w) = 1+ sqrt(freq(w) * 10e-3)) * 10e-3 / freq(w)
+                P(w) = 1+ sqrt(freq(w) / 10e-3)) * (10e-3 / freq(w))
+
+  I've not used _subsampling_ as strategy to reduce the trainable data, since this would also penalize rare words, which could be very interesting in the case of Homer. I've used _subsampling_ to construct the noise distribution used to derive the negative samples.
 
 - Split sets (training, validation): common practice in almost all Neural Networks implementations, but still I've seen many projects with just one set (training) implemented. The main purpose was to avoid overfitting.
 
@@ -72,15 +77,17 @@ The model implemented here is quite a vanilla Word2Vec Skipgram. I've however tr
 
 <img src="./data/assets/losses_train_RMSop_optimizer.png" alt="loss_train" style="width: 500px; height:250px" >
 
-### Predictions
+## Predictions
 
-|    θεά    |  εὔχομαι  |     ἔρος      |  ερχομαι  |
+Probable context words for the header word:
+
+| γλαυκῶπις |  εὔχομαι  |     ἔρος      |  ερχομαι  |
 | :-------: | :-------: | :-----------: | :-------: |
-| γλαυκῶπις |   ειναι   | περιπροχυθεις |  δομενευ  |
+|    θεά    |   ειναι   | περιπροχυθεις |  δομενευ  |
 |   ἀθήνη   |  εξειπω   |    ρυμνης     |  γενεσιν  |
-|    Ἥρη    | νικησαντʼ |   γυναικος    | οτρυνῃσιν |
-|   θύμῳ    |    εγω    |  καταλεξομεν  |  απασης   |
-|    περ    |    ος     |     ουδε      | βουληφορε |
+|  Παλλὰς   | νικησαντʼ |   γυναικος    | οτρυνῃσιν |
+|  ἐνόησε   |    εγω    |  καταλεξομεν  |  απασης   |
+| ἠμείβετʼ  |    ος     |     ουδε      | βουληφορε |
 
 ## Requirements
 

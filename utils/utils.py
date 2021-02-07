@@ -3,8 +3,18 @@ Auxiliary functions
 
 """
 
+
 import numpy as np
 import torch
+from sklearn.preprocessing import StandardScaler
+from sklearn.manifold import TSNE
+import pandas as pd
+import bokeh.models as bm
+import bokeh.plotting as pl
+from bokeh.io import export_png, output_file
+from bokeh.plotting import figure, show
+from bokeh.transform import factor_cmap, factor_mark, linear_cmap
+from bokeh.palettes import Category20_9
 
 # TEST
 
@@ -53,3 +63,44 @@ def print_test(model, words, w2i, i2w, epoch, save=False, n=10, metrics="cosine"
     if save:
         with open("data/assets/skipgram_predictions.txt", 'a', encoding="utf-8") as fp:
             fp.write("\n" + "="*20 + "\n")
+
+
+def tsne_reduction(embeddings, perplexity=20):
+    scaler = StandardScaler()
+    tsne = TSNE(n_components=2,
+                perplexity=perplexity,
+                metrics="euclidean",
+                verbose=2,
+                n_iter=4)
+    vectors_tsne = tsne.fit_transform(embeddings)
+    vectors_tsne = scaler.fit_transform(vectors_tsne)
+    return vectors_tsne
+
+
+def make_dataframe(vectors_tsne, word2index):
+    df = pd.DataFrame(data=vectors_tsne, columns=["x", "y"])
+    df['word'] = list(word2index.keys())
+    return df
+
+
+def draw_tsne(df, fp, alpha=0.69, width=600, height=400, show=True, title="Homer Embeddings"):
+    """ draws an interactive plot for data points with auxilirary info on hover """
+    output_file(fp, title=title)
+    src = bm.ColumnDataSource(df)
+
+    mapper = linear_cmap(
+        field_name='y', palette=Category20_9, low=min(y), high=max(y))
+    fig = pl.figure(active_scroll='wheel_zoom', width=width,
+                    height=height, title=title)
+
+    fig.scatter('x', 'y',
+                size=10,
+                line_color=mapper,
+                color=mapper,
+                fill_alpha=alpha,
+                source=src)
+
+    fig.add_tools(bm.HoverTool(tooltips=[("token", "@word")]))
+    pl.save(fig, title=title)
+    if show:
+        pl.show(fig)
