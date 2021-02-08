@@ -120,10 +120,12 @@ class SkipGram(nn.Module):
         # If the actual loss (in the training) has improved save it in the checklist and save the model
         if losses[-1] < check_loss[-1]:
             print(
-                f"Actual loss: {losses[-1]}\nLast best loss: {check_loss[-1]}")
+                f"Actual loss: {losses[-1]} - Best loss until now: {check_loss[-1]}, improved by {losses[-1] - check_loss[-1]}")
             print("\nSaving the model model\n")
             check_loss.append(losses[-1])
             torch.save(
                 {'model_state_dict': self.state_dict(), 'losses': losses}, fp)
         else:
             print("Loss didn't improve, skip saving")
+            print(
+                f"Actual loss: {losses[-1]} - Best loss until now: {check_loss[-1]}, worse by {losses[-1] - check_loss[-1]}")

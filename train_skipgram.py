@@ -39,10 +39,10 @@ params = Namespace(
     # Already shuffled when creating the dataset (both training and validation)
     shuffle=False,
     drop_last=True,
-    batch=1024,
-    epochs=300,
+    batch=500,
+    epochs=30,
     embeddings=250,
-    neg_sample=50,
+    neg_sample=7,
     lr=0.001,  # automatically adjusted with the scheduler while training
     lr_decay=0.97,
     device='cpu',

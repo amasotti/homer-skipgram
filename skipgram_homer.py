@@ -15,13 +15,12 @@ import random
 import matplotlib.pyplot as plt  # for loss plotting
 import numpy as np
 from tqdm import tqdm, trange
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 # intern imports
 from utils.dataset import make_batch
 from utils.utils import print_test
 
-writer = SummaryWriter(comment="Testing",
-                       log_dir="data/assets/")
+#writer = SummaryWriter(comment="Testing",log_dir="data/assets/")
 
 # -------------------------------------------------------------------------
 #                   LOAD RAW DATA AND CREATE DATASET
@@ -109,9 +108,9 @@ def train_model(model, dataset, vocab, optimizer, scheduler, word2index, index2w
                      params.batch, position=1, leave=True)
 
     # Loss
-    losses_train = [4]
-    losses_val = [4]
-    best_loss = [4]
+    losses_train = []
+    losses_val = []
+    best_loss = [2.4]
     batch_counter = 0  # as x_axis in tensorboard
 
     for epoch in trange(params.epochs):
@@ -125,7 +124,7 @@ def train_model(model, dataset, vocab, optimizer, scheduler, word2index, index2w
 
             loss = model(center, context)
             losses_train.append(loss.item())
-            writer.add_scalar('train loss', loss.item(), batch_counter)
+            #writer.add_scalar('train loss', loss.item(), batch_counter)
             batch_counter += 1
 
             optimizer.zero_grad()
@@ -152,7 +151,7 @@ def train_model(model, dataset, vocab, optimizer, scheduler, word2index, index2w
         for idx, (center, context) in enumerate(Loader):
             loss = model(center, context)
             losses_val.append(loss.item())
-            writer.add_scalar('validation loss', loss.item(), batch_counter)
+            #writer.add_scalar('validation loss', loss.item(), batch_counter)
             batch_counter += 1
             scheduler.step(losses_val[-1])
 
@@ -165,7 +164,8 @@ def train_model(model, dataset, vocab, optimizer, scheduler, word2index, index2w
 
     if plot:
         plot = plot_loss(losses=losses_train, path=paths.plots)
-    writer.close()
+    # writer.close()
+    model.save(fp=paths.model, losses=losses_train, check_loss=best_loss)
 
 # ---------------------------------------------------------------------------------
 #               PLOTS AND STATS

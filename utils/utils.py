@@ -83,7 +83,7 @@ def make_dataframe(vectors_tsne, word2index):
     return df
 
 
-def draw_tsne(df, fp, alpha=0.69, width=600, height=400, show=True, title="Homer Embeddings"):
+def draw_tsne(df, fp, alpha=0.69, width=1200, height=1000, show=True, title="Homer Embeddings"):
     """ draws an interactive plot for data points with auxilirary info on hover """
     output_file(fp, title=title)
 
