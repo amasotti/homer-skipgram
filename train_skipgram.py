@@ -39,7 +39,7 @@ params = Namespace(
     # Already shuffled when creating the dataset (both training and validation)
     shuffle=False,
     drop_last=True,
-    batch=500,
+    batch=2500,
     epochs=30,
     embeddings=250,
     neg_sample=7,
