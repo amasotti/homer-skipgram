@@ -143,3 +143,4 @@ cython_debug/
 .Rproj.user
 .RData
 data/assets/tsne_plot.html
+*.html
